@@ -29,6 +29,7 @@ int forge_setsockopt(struct sock *sk, int level, int optname, char __user *optva
                      unsigned int optlen);
 int forge_getsockopt(struct sock *sk, int level, int optname, char __user *optval,
                      int __user *optlen);
+struct sock* forge_csk_accept(struct sock *sk, int flags, int *err);
 
 struct proto forge_prot = {
     .name                   = "FORGE",
@@ -36,7 +37,7 @@ struct proto forge_prot = {
     .close                  = tcp_close,
     .connect                = tcp_v4_connect,
     .disconnect             = tcp_disconnect,
-    .accept                 = inet_csk_accept,
+    .accept                 = inet_csk_accept, 
     .ioctl                  = tcp_ioctl,
     .init                   = NULL, //tcp_v4_init_sock, (filled in in init)
     .destroy                = tcp_v4_destroy_sock,
@@ -68,22 +69,64 @@ struct proto forge_prot = {
 #endif
 };
 
+struct proto_ops inet_forge_ops;
 
 static struct inet_protosw forge_sw = {
     .type       = SOCK_FORGE,
     .protocol   = IPPROTO_TCP, 
     .prot       = &forge_prot,
-    .ops        = &inet_stream_ops,
+    .ops        = &inet_forge_ops,
     .no_check   = 0,
     .flags      = INET_PROTOSW_ICSK,
                   //INET_PROTOSW_PERMANENT |
                   //INET_PROTOSW_ICSK,
 };
 
+
+int inet_forge_listen(struct socket *sock, int backlog)
+{
+
+    struct sock *sk = sock->sk;
+    unsigned char old_state;
+    int err;
+
+    lock_sock(sk);
+
+    err = -EINVAL;
+    if (sock->state != SS_UNCONNECTED || sock->type != SOCK_FORGE)
+            goto out;
+
+    old_state = sk->sk_state;
+    if (!((1 << old_state) & (TCPF_CLOSE | TCPF_LISTEN)))
+            goto out;
+
+    /* Really, if the socket is already in listen state
+     * we can only allow the backlog to be adjusted.
+     */
+    if (old_state != TCP_LISTEN) {
+            err = inet_csk_listen_start(sk, backlog);
+            if (err)
+                    goto out;
+    }
+    sk->sk_max_ack_backlog = backlog;
+    err = 0;
+
+out:
+    release_sock(sk);
+    return err;
+}
+
+
 int __init forge_init(void)
 {
     int rc = -EINVAL;
     printk(KERN_INFO "Loaded forge_socket\n");
+
+    memcpy(&inet_forge_ops, &inet_stream_ops, sizeof(inet_forge_ops));
+    inet_forge_ops.listen = inet_forge_listen;
+    inet_forge_ops.getsockopt = forge_getsockopt;
+    //inet_forge_ops.setsockopt = forge_setsockopt; // Only used in listen case...boy this is a mess
+
 
     // These members were not exported from the kernel,
     // so we use this hack to grab them from the exported tcp_prot struct.
