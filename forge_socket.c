@@ -29,6 +29,11 @@ int forge_setsockopt(struct sock *sk, int level, int optname, char __user *optva
                      unsigned int optlen);
 int forge_getsockopt(struct sock *sk, int level, int optname, char __user *optval,
                      int __user *optlen);
+int forge_getsockopt_socket(struct socket *sock, int level, int optname, char __user *optval,
+                            int __user *optlen)
+{
+    return forge_getsockopt(sock->sk, level, optname, optval, optlen);
+}
 struct sock* forge_csk_accept(struct sock *sk, int flags, int *err);
 
 struct proto forge_prot = {
@@ -124,7 +129,7 @@ int __init forge_init(void)
 
     memcpy(&inet_forge_ops, &inet_stream_ops, sizeof(inet_forge_ops));
     inet_forge_ops.listen = inet_forge_listen;
-    inet_forge_ops.getsockopt = forge_getsockopt;
+    inet_forge_ops.getsockopt = forge_getsockopt_socket;
     //inet_forge_ops.setsockopt = forge_setsockopt; // Only used in listen case...boy this is a mess
 
 
@@ -224,7 +229,7 @@ int forge_getsockopt(struct sock *sk, int level, int optname, char __user *optva
         ret.inet_num = inet_sk(sk)->inet_num;
         ret.has_icsk_bind_hash = (inet_csk(sk)->icsk_bind_hash != NULL);
 
-
+        // TODO: check optlen == sizeof(ret), otherwise only write optlen bytes!
         if (put_user(sizeof(ret), optlen))
             return -EFAULT;
         if (copy_to_user(optval, &ret, sizeof(ret)))
