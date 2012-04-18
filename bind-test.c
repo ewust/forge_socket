@@ -80,17 +80,20 @@ int main()
     
     struct tcp_state state;
     int r;
-    if (send(sock_recv, "hello", 5, 0) < 0) {
+    if (send(sock_recv, "hello\n", 6, 0) < 0) {
         perror("send");
         return -1;
     }
 
-    r = getsockopt(sock_recv, IPPROTO_TCP, TCP_STATE, &state, &len);
+    len = sizeof(state);
+    r = getsockopt(sock, IPPROTO_TCP, TCP_STATE, &state, &len);
     if (r != 0) {
         perror("getsockopt");
         return -1;
     }
     print_state(&state);
+
+    sleep(5);
     
 
     return 0;

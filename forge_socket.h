@@ -5,6 +5,7 @@
 
 #define SOCK_FORGE      9   // new protocol 
 #define TCP_STATE       18  // new TCP sockopt
+#define TCP_SECURE_RAND 19  // and another
 
 //Debug:
 #define TCP_CA_NAME_MAX 16

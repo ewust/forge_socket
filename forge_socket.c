@@ -7,6 +7,7 @@
 #include <linux/jiffies.h>
 #include <linux/syscalls.h>
 #include <linux/types.h>
+#include <linux/random.h>
 #include <linux/tcp.h>
 #include <net/inet_connection_sock.h>
 #include <net/tcp.h>
@@ -188,14 +189,41 @@ int forge_getsockopt(struct sock *sk, int level, int optname, char __user *optva
 {
     struct tcp_state ret;
 
-    if (optname == TCP_STATE) {
+    if (optname == TCP_SECURE_RAND) {
+        struct tcp_state user_st;
+        __u32 seq_ret;
+
+        if (!capable(CAP_NET_RAW)) {
+            return -EACCES; 
+        }
+
+        __be32 h_init[16];
+        memset(h_init, 0, 16);
+        h_init[0] = inet_sk(sk)->inet_saddr;
+        h_init[1] = inet_sk(sk)->inet_daddr;
+        h_init[2] = (inet_sk(sk)->inet_sport << 16) + (inet_sk(sk)->inet_dport);
+
+
+        seq_ret = secure_tcpv6_sequence_number(h_init,
+                                               h_init,
+                                               inet_sk(sk)->inet_sport, 
+                                               inet_sk(sk)->inet_dport);
+
+        if (put_user(sizeof(seq_ret), optlen))
+            return -EFAULT;
+        if (put_user(seq_ret, optval))
+            return -EFAULT;
+
+        return 0;
+
+    } else if (optname == TCP_STATE) {
         if (!capable(CAP_NET_RAW)) {
             return -EACCES;
         }
 
         ret.ack     = tcp_sk(sk)->rcv_nxt;
         ret.seq     = tcp_sk(sk)->snd_nxt;
-        ret.src_ip  = inet_sk(sk)->inet_rcv_saddr; // or inet_saddr?
+        ret.src_ip  = inet_sk(sk)->inet_saddr; // or inet_rcv_saddr?
         ret.dst_ip  = inet_sk(sk)->inet_daddr;
         ret.sport   = inet_sk(sk)->inet_sport;
         ret.dport   = inet_sk(sk)->inet_dport;
