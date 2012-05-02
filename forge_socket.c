@@ -158,18 +158,20 @@ int forge_getsockopt(struct sock *sk, int level, int optname,
 		ret.snd_wnd = tcp_sk(sk)->snd_wnd;
 		ret.rcv_wnd = tcp_sk(sk)->rcv_wnd;
 
-		ret.tstamp_ok = tcp_sk(sk)->rx_opt.tstamp_ok;
-		ret.ecn_ok    = ((tcp_sk(sk)->ecn_flags & TCP_ECN_OK) != 0);
-		ret.sack_ok   = tcp_sk(sk)->rx_opt.sack_ok;
-		ret.wscale_ok = tcp_sk(sk)->rx_opt.wscale_ok;
-		ret.snd_wscale= tcp_sk(sk)->rx_opt.snd_wscale;
-		ret.rcv_wscale= tcp_sk(sk)->rx_opt.rcv_wscale;
+		ret.tstamp_ok  = tcp_sk(sk)->rx_opt.tstamp_ok;
+		ret.ecn_ok     = ((tcp_sk(sk)->ecn_flags & TCP_ECN_OK) != 0);
+		ret.sack_ok    = tcp_sk(sk)->rx_opt.sack_ok;
+		ret.wscale_ok  = tcp_sk(sk)->rx_opt.wscale_ok;
+		ret.snd_wscale = tcp_sk(sk)->rx_opt.snd_wscale;
+		ret.rcv_wscale = tcp_sk(sk)->rx_opt.rcv_wscale;
 
-		// TODO: check optlen == sizeof(ret), otherwise only write optlen bytes!
+		/* TODO: check optlen == sizeof(ret), 
+           otherwise only write optlen bytes!
+        */
 		if (put_user(sizeof(ret), optlen))
 			return -EFAULT;
 		if (copy_to_user(optval, &ret, sizeof(ret)))
-			return -EFAULT; 
+			return -EFAULT;
 		return 0;
 	}
 	return tcp_getsockopt(sk, level, optname, optval, optlen);
@@ -184,15 +186,13 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 		struct inet_connection_sock *icsk;
 		struct tcp_sock *tp;
 
-		if (!capable(CAP_NET_RAW)) {
+		if (!capable(CAP_NET_RAW))
 			return -EACCES;
-		}
 
-		if (copy_from_user(&st, (struct tcp_state __user *)optval, sizeof(st))) {
+		if (copy_from_user(&st, (struct tcp_state __user *)optval, sizeof(st)))
 			return -EFAULT;
-		}
 
-		// syn_recv:
+		/* from syn_recv: */
 		icsk = inet_csk(sk);
 		tp = tcp_sk(sk);
 
@@ -214,17 +214,16 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 		icsk->icsk_ext_hdr_len = 0;
 
 		tcp_mtup_init(sk);
-		if (tp->rx_opt.user_mss && tp->rx_opt.user_mss < tp->advmss) {
+		if (tp->rx_opt.user_mss && tp->rx_opt.user_mss < tp->advmss)
 			tp->advmss = tp->rx_opt.user_mss;
-		}  
 
 		/* from inet_csk_forge: */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 33)
-		inet_sk(sk)->dport = st.dport;  
+		inet_sk(sk)->dport = st.dport;
 		inet_sk(sk)->num = ntohs(st.sport);
 		inet_sk(sk)->sport = st.sport;
 #else
-		inet_sk(sk)->inet_dport = st.dport;  
+		inet_sk(sk)->inet_dport = st.dport;
 		inet_sk(sk)->inet_num = ntohs(st.sport);
 		inet_sk(sk)->inet_sport = st.sport;
 #endif
@@ -241,7 +240,8 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 		tp->pred_flags = 0;
 		tp->rcv_wup = tp->copied_seq = tp->rcv_nxt = st.ack;
 
-		tp->snd_sml = tp->snd_nxt = tp->snd_up = st.seq; /* + tcp_s_data_size(oldtp) */
+		tp->snd_sml = tp->snd_nxt = tp->snd_up = st.seq;
+        /* + tcp_s_data_size(oldtp) */
 
 		tcp_prequeue_init(tp);
 
@@ -304,7 +304,8 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 			tp->rx_opt.rcv_tsval = st.ts_val;
 
 			tp->advmss -= TCPOLEN_TSTAMP_ALIGNED;
-			tp->tcp_header_len = sizeof(struct tcphdr) + TCPOLEN_TSTAMP_ALIGNED;
+			tp->tcp_header_len = sizeof(struct tcphdr) +
+                                 TCPOLEN_TSTAMP_ALIGNED;
 		} else {
 			tp->rx_opt.ts_recent_stamp = 0;
 			tp->tcp_header_len = sizeof(struct tcphdr);
@@ -327,7 +328,7 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 
 		/* TODO(swolchok): use a real RTT measurement. */
 		/* TODO(ewust): use exported functions to do this */
-		/* tcp_valid_rtt_meas(sk, msecs_to_jiffies(10)); 
+		/* tcp_valid_rtt_meas(sk, msecs_to_jiffies(10));
 		tcp_ack_update_rtt(sk, 0, 0); */
 
 		icsk->icsk_af_ops->rebuild_header(sk);
@@ -344,7 +345,9 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 		/*tcp_init_buffer_space(sk);*/
 		tcp_fast_path_on(tp);
 
-		/* If user did not call bind on this socket, we'll have to do this:*/
+		/* If user did not call bind on this socket,
+           we'll have to do this:
+        */
 		/*inet_csk_get_port(sk, st->sport);*/
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 33)
@@ -366,6 +369,7 @@ module_exit(forge_exit);
 /* Originally adapted from Scott Wolchok's kernel patch. */
 MODULE_AUTHOR("Eric Wustrow,"
 			  "Scott Wolchok");
-MODULE_DESCRIPTION("Creates TCP sockets with arbitrary TCP/IP state (src, dst) (ports, seq, ack etc)");
+MODULE_DESCRIPTION("Creates TCP sockets with arbitrary TCP/IP state "
+                   "(src, dst) (ports, seq, ack etc)");
 MODULE_LICENSE("GPL");
 
