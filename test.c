@@ -191,14 +191,11 @@ int test_perms()
     return 1;
 }
 
-int main()
+
+// Connect to a remote host normally, pull out our state,
+// Then create a new socket with that state
+int test_swap()
 {
-    
-
-    //test_dual();
-    return test_perms();
-
-
     int sock;
     struct sockaddr_in sin;
 
@@ -241,7 +238,33 @@ int main()
     // Oh boy...here we go
     char *msg = "Hello, world!\n";
     r = send(sock2, msg, strlen(msg), 0);
-    printf("send returned %d\n", r);
+    if (r < 0) {
+        perror("[-] send");
+        return -1;
+    }
+    printf("[+] send returned %d\n", r);
+    return 0;
+    
+    char rbuf[100];
+    r = recv(sock2, rbuf, sizeof(rbuf), 0);
+    if (r < 0) {
+        perror("[-] recv");
+        return -1;
+    }
+    printf("[+] recv returned %d\n", r);
+    return 0;
+}
+
+int main()
+{
+    
+
+    if (test_dual()) {
+        return 1;
+    }
+    printf("[+] passed dual test\n");
+    //return test_perms();
+    return test_swap();
 
     sleep(5);
     return 0;
