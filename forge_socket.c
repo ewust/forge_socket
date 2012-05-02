@@ -8,6 +8,7 @@
 #include <linux/syscalls.h>
 #include <linux/types.h>
 #include <linux/tcp.h>
+#include <linux/version.h>
 #include <net/inet_connection_sock.h>
 #include <net/tcp.h>
 #include <net/tcp_states.h>
@@ -195,10 +196,18 @@ int forge_getsockopt(struct sock *sk, int level, int optname, char __user *optva
 
         ret.ack     = tcp_sk(sk)->rcv_nxt;
         ret.seq     = tcp_sk(sk)->snd_nxt;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,33)
+        ret.src_ip  = inet_sk(sk)->rcv_saddr; // or inet_saddr?
+        ret.dst_ip  = inet_sk(sk)->daddr;
+        ret.sport   = inet_sk(sk)->sport;
+        ret.dport   = inet_sk(sk)->dport;
+
+#else
         ret.src_ip  = inet_sk(sk)->inet_rcv_saddr; // or inet_saddr?
         ret.dst_ip  = inet_sk(sk)->inet_daddr;
         ret.sport   = inet_sk(sk)->inet_sport;
         ret.dport   = inet_sk(sk)->inet_dport;
+#endif
 
         ret.snd_una = tcp_sk(sk)->snd_una;
         ret.snd_wnd = tcp_sk(sk)->snd_wnd;
@@ -226,7 +235,7 @@ int forge_getsockopt(struct sock *sk, int level, int optname, char __user *optva
         ret.icsk_ca_ops_default = (inet_csk(sk)->icsk_ca_ops == &tcp_init_congestion_ops);
         strncpy(ret.icsk_ca_name, inet_csk(sk)->icsk_ca_ops->name, TCP_CA_NAME_MAX);
 
-        ret.inet_num = inet_sk(sk)->inet_num;
+        //ret.inet_num = inet_sk(sk)->inet_num;
         ret.has_icsk_bind_hash = (inet_csk(sk)->icsk_bind_hash != NULL);
 
         // TODO: check optlen == sizeof(ret), otherwise only write optlen bytes!
@@ -298,10 +307,18 @@ int forge_setsockopt(struct sock *sk, int level, int optname, char __user *optva
         //isk = inet_sk(sk);
         tp = tcp_sk(sk);
 
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,33)
+        inet_sk(sk)->daddr = st.dst_ip;
+        inet_sk(sk)->rcv_saddr = st.src_ip;
+        inet_sk(sk)->saddr = st.src_ip;
+        inet_sk(sk)->id = tp->write_seq ^ jiffies;
+#else
         inet_sk(sk)->inet_daddr = st.dst_ip;
         inet_sk(sk)->inet_rcv_saddr = st.src_ip;
         inet_sk(sk)->inet_saddr = st.src_ip;
         inet_sk(sk)->inet_id = tp->write_seq ^ jiffies;
+#endif
         inet_sk(sk)->opt = NULL;    // TODO(swolchok): do I have to kmalloc a struct ip_options?
         inet_sk(sk)->mc_ttl = 1;    // TODO: add multicast support
     
@@ -317,9 +334,15 @@ int forge_setsockopt(struct sock *sk, int level, int optname, char __user *optva
 
         // inet_csk_forge:
         // TODO: worry about endianness
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,33)
+        inet_sk(sk)->dport = st.dport;  
+        inet_sk(sk)->num = ntohs(st.sport);
+        inet_sk(sk)->sport = st.sport;
+#else
         inet_sk(sk)->inet_dport = st.dport;  
         inet_sk(sk)->inet_num = ntohs(st.sport);
         inet_sk(sk)->inet_sport = st.sport;
+#endif
         sk->sk_write_space = sk_stream_write_space;
 
         inet_csk(sk)->icsk_retransmits = 0;
@@ -445,7 +468,11 @@ int forge_setsockopt(struct sock *sk, int level, int optname, char __user *optva
         // If user did not call bind on this socket, we'll have to do this:
         //inet_csk_get_port(sk, st->sport); 
     
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,33)
+        __inet_hash_nolisten(sk);
+#else
         __inet_hash_nolisten(sk, NULL);
+#endif
 
         return 0;
     }
