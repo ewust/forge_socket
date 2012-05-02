@@ -36,23 +36,6 @@ struct tcp_state {
     __u32       ts_val;   // Timestamp to use next.
 
     __u32       mss_clamp; /* XXX: I guess this is negotiated in the handshake? Eric? */
-
-
-    // Extra testing/debugging:
-    unsigned short  skc_family;
-    unsigned char   skc_state;
-    int             skc_refcnt;
-    int             skc_bound_dev_if;
-
-    int             icsk_ca_ops_default;
-    __u16           tp_header_len;
-    __u32           tp_copied_seq;
-    __u32           tp_rcv_wup;
-    __u32           tp_snd_sml;
-    char            icsk_ca_name[TCP_CA_NAME_MAX];
-    __u16           inet_num;
-    int             has_icsk_bind_hash;
-
 };
 
 

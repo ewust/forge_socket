@@ -14,8 +14,6 @@ void print_state(struct tcp_state *st)
            ntohl(st->src_ip), ntohs(st->sport), \
            ntohl(st->dst_ip), ntohs(st->dport));
     printf("\tseq: %x\n\tack:%x\n", st->seq, st->ack);
-    printf("\tfamily: %x\n\tstate: %x\n\trefcnt: %x\n\tbound_dev_if: %d\n", \
-           st->skc_family, st->skc_state, st->skc_refcnt, st->skc_bound_dev_if);
     printf("\tsnd_una: %x\n", st->snd_una);
     printf("\ttstamp_ok: %d\n", st->tstamp_ok);
     printf("\tsack_ok: %d\n", st->sack_ok);
@@ -23,19 +21,6 @@ void print_state(struct tcp_state *st)
     printf("\tecn_ok: %d\n", st->ecn_ok);
     printf("\tsnd_wscale: %d\n", st->snd_wscale);
     printf("\trcv_wscale: %d\n", st->rcv_wscale);
-    //Debug:
-    printf("\tsnd_wnd: %x\n", st->snd_wnd);
-    printf("\trcv_wnd: %x\n", st->rcv_wnd);
-    printf("\tdefault_ca_ops: %d\n", st->icsk_ca_ops_default);
-    printf("\ttcp_header_len: %d\n", st->tp_header_len);
-    printf("\tcopied_seq: %x\n", st->tp_copied_seq);
-    printf("\trcv_wup: %x\n", st->tp_rcv_wup);
-    printf("\tsnd_sml: %x\n", st->tp_snd_sml);
-    printf("\tca_name: %s\n", st->icsk_ca_name);
-    printf("\tinet_num: %d\n", st->inet_num);
-    printf("\thas_icsk_bind_hash: %d\n", st->has_icsk_bind_hash);
-    
-    
 }
 
 // Fills in all but the src/dst ip/port and seq/ack numbers
