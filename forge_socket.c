@@ -1,8 +1,6 @@
 #include <linux/module.h>   /* Needed by all modules */
 #include <linux/kernel.h>   /* Needed for KERN_INFO */
 #include <net/protocol.h>
-//#include "tcp_sk_forge.h"
-//#include <linux/atomic.h>
 #include <linux/file.h>
 #include <linux/jiffies.h>
 #include <linux/syscalls.h>
@@ -17,7 +15,6 @@
 #include <net/sock.h>
 #include <net/ip.h>
 #include <net/route.h>
-
 #include <asm/uaccess.h>
 /* sk should be the struct sock from our original struct socket passed to accept. */
 
@@ -37,46 +34,8 @@ int forge_getsockopt_socket(struct socket *sock, int level, int optname, char __
 }
 struct sock* forge_csk_accept(struct sock *sk, int flags, int *err);
 
-struct proto forge_prot = {
-    .name                   = "FORGE",
-    .owner                  = THIS_MODULE,
-    .close                  = tcp_close,
-    .connect                = tcp_v4_connect,
-    .disconnect             = tcp_disconnect,
-    .accept                 = inet_csk_accept, 
-    .ioctl                  = tcp_ioctl,
-    .init                   = NULL, //tcp_v4_init_sock, (filled in in init)
-    .destroy                = tcp_v4_destroy_sock,
-    .shutdown               = tcp_shutdown,
-    .setsockopt             = forge_setsockopt,
-    .getsockopt             = forge_getsockopt,
-    .recvmsg                = tcp_recvmsg,
-    .backlog_rcv            = tcp_v4_do_rcv,
-    //.hash                   = inet_hash,
-    //.unhash                 = inet_unhash,
-    //.get_port               = inet_csk_get_port,
-    .enter_memory_pressure  = tcp_enter_memory_pressure,
-    .sockets_allocated      = &tcp_sockets_allocated,
-    //.orphan_count           = &tcp_orphan_count,
-    .memory_allocated       = &tcp_memory_allocated,
-    .memory_pressure        = &tcp_memory_pressure,
-    .sysctl_mem             = sysctl_tcp_mem,
-    .sysctl_wmem            = sysctl_tcp_wmem,
-    .sysctl_rmem            = sysctl_tcp_rmem,
-    .max_header             = MAX_TCP_HEADER,
-    .obj_size               = sizeof(struct tcp_sock),
-    .slab_flags             = SLAB_DESTROY_BY_RCU,
-    //.twsk_prot              = &forge_timewait_sock_ops, // equiv to tcp_timewait_sock_ops
-//    .rsk_prot               = &forge_request_sock_ops, // equiv to tcp_request_sock_ops,
-    .h.hashinfo             = &tcp_hashinfo,
-#ifdef CONFIG_COMPAT
-    .compat_setsockopt      = compat_tcp_setsockopt,
-    .compat_getsockopt      = compat_tcp_getsockopt,
-#endif
-};
-
+struct proto forge_prot;
 struct proto_ops inet_forge_ops;
-
 static struct inet_protosw forge_sw = {
     .type       = SOCK_FORGE,
     .protocol   = IPPROTO_TCP, 
@@ -84,11 +43,10 @@ static struct inet_protosw forge_sw = {
     .ops        = &inet_forge_ops,
     .no_check   = 0,
     .flags      = INET_PROTOSW_ICSK,
-                  //INET_PROTOSW_PERMANENT |
-                  //INET_PROTOSW_ICSK,
 };
 
-
+// This is a copy of inet_listen, but uses SOCK_FORGE instead of SOCK_STREAM
+// This allows us to listen on SOCK_FORGE sockets.
 int inet_forge_listen(struct socket *sock, int backlog)
 {
 
@@ -130,38 +88,30 @@ int __init forge_init(void)
 
     memcpy(&inet_forge_ops, &inet_stream_ops, sizeof(inet_forge_ops));
     inet_forge_ops.listen = inet_forge_listen;
-    inet_forge_ops.getsockopt = forge_getsockopt_socket;
+    inet_forge_ops.getsockopt = forge_getsockopt_socket; // Get state for a listening socket
     //inet_forge_ops.setsockopt = forge_setsockopt; // Only used in listen case...boy this is a mess
 
 
-    // These members were not exported from the kernel,
-    // so we use this hack to grab them from the exported tcp_prot struct.
-    forge_prot.init = tcp_prot.init;
-    forge_prot.hash = tcp_prot.hash;
-    forge_prot.unhash = tcp_prot.unhash;
-    forge_prot.get_port = tcp_prot.get_port;
-    forge_prot.orphan_count = tcp_prot.orphan_count;
-    
-    // proto_register will only alloc these if they are null,
-    // no sense in allocing more space - we can just use TCP's.
+    // Not all tcp_prot's memebers were exported from the kernel,
+    // so we use this hack to grab them from the exported tcp_prot struct,
+    // and fill in our own.
+    memcpy(&forge_prot, &tcp_prot, sizeof(forge_prot));
+    strncpy(forge_prot.name, "FORGE", sizeof(forge_prot.name));
+    forge_prot.owner = THIS_MODULE;
+    forge_prot.getsockopt = forge_getsockopt;
+    forge_prot.setsockopt = forge_setsockopt;
+
+    // proto_register will only alloc twsk_prot and rsk_prot if they are null,
+    // no sense in allocing more space - we can just use TCP's, since we are
+    // effecitvely just a TCP socket
     // (though it will alloc .slab even if non-null - we let it).
-    forge_prot.twsk_prot = tcp_prot.twsk_prot;
-    forge_prot.rsk_prot = tcp_prot.rsk_prot;
-
-
     rc = proto_register(&forge_prot, 1);
     if (rc) {
         printk(KERN_CRIT "forge_init: Cannot register protocol (already loaded?)\n");
         return rc;
     }
  
-    //sock_register() was done by af_inet, 
-    //  and registers a create handler for socket(PF_INET, ...) - we don't want this
-
-    //inet_add_protocol(&forge_proto, SOCK_FORGE);
-    // adds handlers for receiving IPPROTO_* packets - we don't want this
-
-    // Let's us (as per forge_prot) deal with SOCK_FORGE sockets.
+    // Let's us (as per forge_prot) handle SOCK_FORGE sockets.
     inet_register_protosw(&forge_sw);
 
     return 0;
@@ -197,13 +147,12 @@ int forge_getsockopt(struct sock *sk, int level, int optname, char __user *optva
         ret.ack     = tcp_sk(sk)->rcv_nxt;
         ret.seq     = tcp_sk(sk)->snd_nxt;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,33)
-        ret.src_ip  = inet_sk(sk)->rcv_saddr; // or inet_saddr?
+        ret.src_ip  = inet_sk(sk)->rcv_saddr;
         ret.dst_ip  = inet_sk(sk)->daddr;
         ret.sport   = inet_sk(sk)->sport;
         ret.dport   = inet_sk(sk)->dport;
-
 #else
-        ret.src_ip  = inet_sk(sk)->inet_rcv_saddr; // or inet_saddr?
+        ret.src_ip  = inet_sk(sk)->inet_rcv_saddr;
         ret.dst_ip  = inet_sk(sk)->inet_daddr;
         ret.sport   = inet_sk(sk)->inet_sport;
         ret.dport   = inet_sk(sk)->inet_dport;
@@ -220,24 +169,6 @@ int forge_getsockopt(struct sock *sk, int level, int optname, char __user *optva
         ret.snd_wscale= tcp_sk(sk)->rx_opt.snd_wscale;
         ret.rcv_wscale= tcp_sk(sk)->rx_opt.rcv_wscale;
         
-
-        // Debugging/testing:
-        ret.skc_refcnt = sk->sk_refcnt.counter;
-        ret.skc_family = sk->sk_family;
-        ret.skc_state  = sk->sk_state;
-        ret.skc_bound_dev_if = sk->sk_bound_dev_if;
-
-        ret.tp_header_len = tcp_sk(sk)->tcp_header_len;        
-        ret.tp_copied_seq = tcp_sk(sk)->copied_seq;
-        ret.tp_rcv_wup = tcp_sk(sk)->rcv_wup;
-        ret.tp_snd_sml = tcp_sk(sk)->rcv_wup;
-
-        ret.icsk_ca_ops_default = (inet_csk(sk)->icsk_ca_ops == &tcp_init_congestion_ops);
-        strncpy(ret.icsk_ca_name, inet_csk(sk)->icsk_ca_ops->name, TCP_CA_NAME_MAX);
-
-        //ret.inet_num = inet_sk(sk)->inet_num;
-        ret.has_icsk_bind_hash = (inet_csk(sk)->icsk_bind_hash != NULL);
-
         // TODO: check optlen == sizeof(ret), otherwise only write optlen bytes!
         if (put_user(sizeof(ret), optlen))
             return -EFAULT;
