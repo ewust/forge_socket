@@ -285,7 +285,6 @@ int forge_setsockopt(struct sock *sk, int level, int optname, char __user *optva
         //struct inet_sock *isk;
         struct tcp_sock *tp;
         struct dst_entry *dst;
-        struct rtable *rt;
 
         if (!capable(CAP_NET_RAW)) {
             return -EACCES;
@@ -300,33 +299,22 @@ int forge_setsockopt(struct sock *sk, int level, int optname, char __user *optva
         //isk = inet_sk(sk);
         tp = tcp_sk(sk);
 
-        if ((rt = fake_inet_csk_route_req(sk, &st)) == NULL) {
-            return -EINVAL;
-        }
-        //dst = &rt->dst;
-        dst = &rt->u.dst; 
-        
         inet_sk(sk)->inet_daddr = st.dst_ip;
         inet_sk(sk)->inet_rcv_saddr = st.src_ip;
         inet_sk(sk)->inet_saddr = st.src_ip;
         inet_sk(sk)->inet_id = tp->write_seq ^ jiffies;
-        // TODO(swolchok): do I have to kmalloc a struct ip_options?
-        inet_sk(sk)->opt = NULL;
-        inet_sk(sk)->mc_index = rt->rt_iif; // Check this...should be inet_iif(skb).
-        inet_sk(sk)->mc_ttl = 1;  // We are not going to multicast.
+        inet_sk(sk)->opt = NULL;    // TODO(swolchok): do I have to kmalloc a struct ip_options?
+        inet_sk(sk)->mc_ttl = 1;    // TODO: add multicast support
     
         icsk->icsk_ext_hdr_len = 0;
   
         // This should all work fine for us.
         tcp_mtup_init(sk);
-        tcp_sync_mss(sk, dst_mtu(dst));
-        tp->advmss = dst_metric(dst, RTAX_ADVMSS);
+        //tcp_sync_mss(sk, dst_mtu(dst));
+        //tp->advmss = dst_metric(dst, RTAX_ADVMSS);
         if (tp->rx_opt.user_mss && tp->rx_opt.user_mss < tp->advmss) {
             tp->advmss = tp->rx_opt.user_mss;
-        }
-  
-        tcp_initialize_rcv_mss(sk);
- 
+        }  
 
         // inet_csk_forge:
         // TODO: worry about endianness
@@ -414,6 +402,7 @@ int forge_setsockopt(struct sock *sk, int level, int optname, char __user *optva
             //tp->rx_opt.ts_offset = st->ts_val - tcp_time_stamp;
             tp->rx_opt.rcv_tsval = st.ts_val;
 
+            tp->advmss -= TCPOLEN_TSTAMP_ALIGNED;
             tp->tcp_header_len = sizeof(struct tcphdr) + TCPOLEN_TSTAMP_ALIGNED;
         } else {
             tp->rx_opt.ts_recent_stamp = 0;
@@ -422,15 +411,9 @@ int forge_setsockopt(struct sock *sk, int level, int optname, char __user *optva
             tp->rx_opt.rcv_tsval = 0;
         }
 
-        // XXX: I don't know what this is...
-#if 0
-        if (skb->len >= TCP_MSS_DEFAULT + newtp->tcp_header_len)
-            newicsk->icsk_ack.last_seg_size = skb->len - newtp->tcp_header_len;
-#endif
         tp->rx_opt.mss_clamp = st.mss_clamp;
         tp->ecn_flags = st.ecn_ok ? TCP_ECN_OK : 0;
  
-
         sk->sk_socket->state = SS_CONNECTED;
 
         // recv_ack:
@@ -446,9 +429,6 @@ int forge_setsockopt(struct sock *sk, int level, int optname, char __user *optva
         //tcp_valid_rtt_meas(sk, msecs_to_jiffies(10)); // TODO: fill in
         //tcp_ack_update_rtt(sk, 0, 0);
 
-        if (tp->rx_opt.tstamp_ok)
-            tp->advmss -= TCPOLEN_TSTAMP_ALIGNED;
-
         icsk->icsk_af_ops->rebuild_header(sk);
 
         //tcp_init_metrics(sk);           // TODO: fill in
@@ -459,7 +439,6 @@ int forge_setsockopt(struct sock *sk, int level, int optname, char __user *optva
 
         tp->lsndtime = tcp_time_stamp;
 
-        tcp_mtup_init(sk);
         tcp_initialize_rcv_mss(sk);
         //tcp_init_buffer_space(sk);    // TODO: fill in
         tcp_fast_path_on(tp);
