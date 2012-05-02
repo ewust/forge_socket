@@ -284,7 +284,6 @@ int forge_setsockopt(struct sock *sk, int level, int optname, char __user *optva
         struct inet_connection_sock *icsk;
         //struct inet_sock *isk;
         struct tcp_sock *tp;
-        struct dst_entry *dst;
 
         if (!capable(CAP_NET_RAW)) {
             return -EACCES;
