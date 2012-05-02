@@ -1,6 +1,15 @@
 forge_socket is a Linux kernel module that allows inspection and modification
 of TCP sockets from user space.
 
+For example, a user space application can specify any arbitrary TCP state
+(i.e. source/destination IP and port, sequence/acknowledgement numbers), and
+request the module modify a socket to these parameters. Then, the application
+can call send() and recv() as normal on this socket.
+
+Furthermore, you can request the state of a TCP socket, for example, to learn
+the sequence and acknowledgement numbers of a connection owned by the process.
+
+
 INSTALLING
 ----------
 
