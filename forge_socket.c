@@ -295,8 +295,8 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 			tp->rx_opt.rcv_tsval = st.ts_val;
 
 			tp->advmss -= TCPOLEN_TSTAMP_ALIGNED;
-			tp->tcp_header_len = sizeof(struct tcphdr) +
-			                     TCPOLEN_TSTAMP_ALIGNED;
+			tp->tcp_header_len = sizeof(struct tcphdr);
+            tp->tcp_header_len += TCPOLEN_TSTAMP_ALIGNED;
 		} else {
 			tp->rx_opt.ts_recent_stamp = 0;
 			tp->tcp_header_len = sizeof(struct tcphdr);
