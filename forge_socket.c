@@ -86,14 +86,15 @@ int __init forge_init(void)
 	forge_prot.getsockopt = forge_getsockopt;
 	forge_prot.setsockopt = forge_setsockopt;
 
-	/* proto_register will only alloc twsk_prot and rsk_prot if they are null
-	   no sense in allocing more space - we can just use TCP's, since we are
-	   effecitvely just a TCP socket
-	   (though it will alloc .slab even if non-null - we let it).
+	/* proto_register will only alloc twsk_prot and rsk_prot if they are
+	   null no sense in allocing more space - we can just use TCP's, since
+	   we are effecitvely just a TCP socket
+	  (though it will alloc .slab even if non-null - we let it).
 	*/
 	rc = proto_register(&forge_prot, 1);
 	if (rc) {
-		printk(KERN_CRIT "forge_init: Cannot register protocol (already loaded?)\n");
+		printk(KERN_CRIT
+			   "forge_init: Cannot register protocol (already loaded?)\n");
 		return rc;
 	}
 
@@ -153,9 +154,9 @@ int forge_getsockopt(struct sock *sk, int level, int optname,
 		ret.snd_wscale = tcp_sk(sk)->rx_opt.snd_wscale;
 		ret.rcv_wscale = tcp_sk(sk)->rx_opt.rcv_wscale;
 
-		/* TODO: check optlen == sizeof(ret), 
-           otherwise only write optlen bytes!
-        */
+		/* TODO: check optlen == sizeof(ret),
+		   otherwise only write optlen bytes!
+		*/
 		if (put_user(sizeof(ret), optlen))
 			return -EFAULT;
 		if (copy_to_user(optval, &ret, sizeof(ret)))
@@ -177,7 +178,8 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 		if (!capable(CAP_NET_RAW))
 			return -EACCES;
 
-		if (copy_from_user(&st, (struct tcp_state __user *)optval, sizeof(st)))
+		if (copy_from_user(&st, (struct tcp_state __user *)optval,
+						   sizeof(st)))
 			return -EFAULT;
 
 		/* from syn_recv: */
@@ -221,7 +223,8 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 		inet_csk(sk)->icsk_backoff = 0;
 		inet_csk(sk)->icsk_probes_out = 0;
 		/* Deinitialize accept_queue to trap illegal accesses. */
-		memset(&icsk->icsk_accept_queue, 0, sizeof(icsk->icsk_accept_queue));
+		memset(&icsk->icsk_accept_queue, 0,
+			   sizeof(icsk->icsk_accept_queue));
 
 
 		/* from tcp_create_openreq_child: */
@@ -293,7 +296,7 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 
 			tp->advmss -= TCPOLEN_TSTAMP_ALIGNED;
 			tp->tcp_header_len = sizeof(struct tcphdr) +
-                                 TCPOLEN_TSTAMP_ALIGNED;
+								 TCPOLEN_TSTAMP_ALIGNED;
 		} else {
 			tp->rx_opt.ts_recent_stamp = 0;
 			tp->tcp_header_len = sizeof(struct tcphdr);
@@ -334,8 +337,8 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 		tcp_fast_path_on(tp);
 
 		/* If user did not call bind on this socket,
-           we'll have to do this:
-        */
+		   we'll have to do this:
+		*/
 		/*inet_csk_get_port(sk, st->sport);*/
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 33)
@@ -358,6 +361,6 @@ module_exit(forge_exit);
 MODULE_AUTHOR("Eric Wustrow,"
 			  "Scott Wolchok");
 MODULE_DESCRIPTION("Creates TCP sockets with arbitrary TCP/IP state "
-                   "(src, dst) (ports, seq, ack etc)");
+				   "(src, dst) (ports, seq, ack etc)");
 MODULE_LICENSE("GPL");
 
