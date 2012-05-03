@@ -93,8 +93,8 @@ int __init forge_init(void)
 	*/
 	rc = proto_register(&forge_prot, 1);
 	if (rc) {
-		printk(KERN_CRIT
-			   "forge_init: Cannot register protocol (already loaded?)\n");
+		printk(KERN_CRIT "forge_init: Cannot register protocol"
+			   "(already loaded?)\n");
 		return rc;
 	}
 
@@ -232,7 +232,7 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 		tp->rcv_wup = tp->copied_seq = tp->rcv_nxt = st.ack;
 
 		tp->snd_sml = tp->snd_nxt = tp->snd_up = st.seq;
-        /* + tcp_s_data_size(oldtp) */
+		/* + tcp_s_data_size(oldtp) */
 
 		tcp_prequeue_init(tp);
 
@@ -296,7 +296,7 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 
 			tp->advmss -= TCPOLEN_TSTAMP_ALIGNED;
 			tp->tcp_header_len = sizeof(struct tcphdr) +
-								 TCPOLEN_TSTAMP_ALIGNED;
+			                     TCPOLEN_TSTAMP_ALIGNED;
 		} else {
 			tp->rx_opt.ts_recent_stamp = 0;
 			tp->tcp_header_len = sizeof(struct tcphdr);
