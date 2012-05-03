@@ -18,18 +18,6 @@
 #include <linux/uaccess.h>
 #include "forge_socket.h"
 
-/* TODO: move these to kernel specific header file */
-int forge_setsockopt(struct sock *sk, int level, int optname,
-		char __user *optval, unsigned int optlen);
-int forge_getsockopt(struct sock *sk, int level, int optname,
-		char __user *optval, int __user *optlen);
-int forge_getsockopt_socket(struct socket *sock, int level, int optname,
-		char __user *optval, int __user *optlen)
-{
-	return forge_getsockopt(sock->sk, level, optname, optval, optlen);
-}
-struct sock *forge_csk_accept(struct sock *sk, int flags, int *err);
-
 struct proto forge_prot;
 struct proto_ops inet_forge_ops;
 static struct inet_protosw forge_sw = {
