@@ -185,7 +185,7 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 		/* from syn_recv: */
 		icsk = inet_csk(sk);
 		tp = tcp_sk(sk);
-
+        /* TODO: Support kernel > 3.3 which doesn't do inet_sk() */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 33)
 		inet_sk(sk)->daddr = st.dst_ip;
@@ -198,7 +198,12 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 		inet_sk(sk)->inet_saddr = st.src_ip;
 		inet_sk(sk)->inet_id = tp->write_seq ^ jiffies;
 #endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
 		inet_sk(sk)->opt = NULL;	/* TODO: support Ip options */
+#else
+        inet_sk(sk)->inet_opt = NULL;
+#endif
+
 		inet_sk(sk)->mc_ttl = 1;    /* TODO: add multicast support */
 
 		icsk->icsk_ext_hdr_len = 0;
