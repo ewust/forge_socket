@@ -253,10 +253,6 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 
 		tp->snd_cwnd = 2;
 		tp->snd_cwnd_cnt = 0;
-		tp->bytes_acked = 0;
-
-		tp->frto_counter = 0;
-		tp->frto_highmark = 0;
 
 		icsk->icsk_ca_ops = &tcp_init_congestion_ops;
 
