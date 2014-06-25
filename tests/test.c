@@ -93,6 +93,11 @@ int test_dual()
 
     int sock1 = socket(AF_INET, SOCK_FORGE, 0);
     int sock2 = socket(AF_INET, SOCK_FORGE, 0);
+    if (sock1 < 0 || sock2 < 0) {
+        perror("SOCK_FORGE socket");
+        fprintf(stderr, "(Did you insmod forge_socket.ko?)\n");
+        return -1;
+    }
 
     
     default_state(&state1);
