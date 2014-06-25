@@ -200,6 +200,7 @@ int forge_setopt_update(struct sock *sk, int level, int optname,
 	tp->rcv_wup = tp->copied_seq = tp->rcv_nxt = st.ack;
 
 	tp->snd_sml = tp->snd_nxt = tp->snd_up = st.seq;
+	tp->write_seq = tp->pushed_seq = st.seq;
 
 	// TODO: tcp timestamps
 
