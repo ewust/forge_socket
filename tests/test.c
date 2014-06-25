@@ -245,6 +245,67 @@ int test_swap()
     return 0;
 }
 
+// Connect to a remote host normally, get state, the change it (same socket)
+int test_update()
+{
+    int sock;
+    struct sockaddr_in sin;
+
+    sock = socket(AF_INET, SOCK_FORGE, 0);
+    if (sock < 0) {
+        perror("socket");
+        return -1;
+    }
+    sin.sin_family      = AF_INET;
+    sin.sin_addr.s_addr = inet_addr("141.212.109.163");
+    sin.sin_port        = htons(443);
+
+    if (connect(sock, (struct sockaddr *)&sin, sizeof(sin)) < 0) {
+        perror("connect");
+        return -1;
+    }
+
+    int r, len;
+    struct tcp_state state, state2;
+    r = getsockopt(sock, IPPROTO_TCP, TCP_STATE, &state, &len);
+    printf("connected socket returned %d\n", r);
+    print_state(&state);
+
+
+    state.seq += 100;
+    state.ack -= 50;
+    if (setsockopt(sock, IPPROTO_TCP, TCP_STATE, &state, sizeof(struct tcp_state)) < 0) {
+        perror("setsockopt TCP_STATE");
+        return -1;
+    }
+
+    r = getsockopt(sock, IPPROTO_TCP, TCP_STATE, &state2, &len);
+    printf("set sock (%d)\n", r);
+    print_state(&state2);
+
+    // Oh boy...here we go
+    char *msg = "Hello, world!\n";
+    r = send(sock, msg, strlen(msg), 0);
+    if (r < 0) {
+        perror("[-] send");
+        return -1;
+    }
+    printf("[+] send returned %d\n", r);
+    return 0;
+    
+    char rbuf[100];
+    r = recv(sock, rbuf, sizeof(rbuf), 0);
+    if (r < 0) {
+        perror("[-] recv");
+        return -1;
+    }
+    printf("[+] recv returned %d\n", r);
+    return 0;
+}
+
+
+
+
 int main()
 {
     
@@ -254,7 +315,12 @@ int main()
     }
     printf("[+] passed dual test\n");
     //return test_perms();
-    return test_swap();
+/*
+    if (test_swap()) {
+        return 1;
+    }
+*/
+    return test_update();
 
     sleep(5);
     return 0;
