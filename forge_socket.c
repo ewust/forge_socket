@@ -167,188 +167,197 @@ int forge_getsockopt(struct sock *sk, int level, int optname,
 }
 EXPORT_SYMBOL(forge_getsockopt);
 
+int forge_setopt_new(struct sock *sk, int level, int optname,
+		char __user *optval, unsigned int optlen)
+{
+	struct tcp_state st;
+	struct inet_connection_sock *icsk;
+	struct tcp_sock *tp;
+	
+	if (copy_from_user(&st, (struct tcp_state __user *)optval,
+						   sizeof(st)))
+		return -EFAULT;
+
+	/* from syn_recv: */
+	icsk = inet_csk(sk);
+	tp = tcp_sk(sk);
+	/* TODO: Support kernel > 3.3 which doesn't do inet_sk() */
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 33)
+	inet_sk(sk)->daddr = st.dst_ip;
+	inet_sk(sk)->rcv_saddr = st.src_ip;
+	inet_sk(sk)->saddr = st.src_ip;
+	inet_sk(sk)->id = tp->write_seq ^ jiffies;
+#else
+	inet_sk(sk)->inet_daddr = st.dst_ip;
+	inet_sk(sk)->inet_rcv_saddr = st.src_ip;
+	inet_sk(sk)->inet_saddr = st.src_ip;
+	inet_sk(sk)->inet_id = tp->write_seq ^ jiffies;
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
+	inet_sk(sk)->opt = NULL;	/* TODO: support Ip options */
+#else
+	inet_sk(sk)->inet_opt = NULL;
+#endif
+
+	inet_sk(sk)->mc_ttl = 63;    /* TODO: add multicast support */
+
+	icsk->icsk_ext_hdr_len = 0;
+
+	//if (!dst && (dst = inet_csk_route_child_sock(sk, newsk, req)) == NULL)
+
+	tcp_mtup_init(sk);
+	if (tp->rx_opt.user_mss && tp->rx_opt.user_mss < tp->advmss)
+		tp->advmss = tp->rx_opt.user_mss;
+
+	/* from inet_csk_forge: */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 33)
+	inet_sk(sk)->dport = st.dport;
+	inet_sk(sk)->num = ntohs(st.sport);
+	inet_sk(sk)->sport = st.sport;
+#else
+	inet_sk(sk)->inet_dport = st.dport;
+	inet_sk(sk)->inet_num = ntohs(st.sport);
+	inet_sk(sk)->inet_sport = st.sport;
+#endif
+	sk->sk_write_space = sk_stream_write_space;
+
+	inet_csk(sk)->icsk_retransmits = 0;
+	inet_csk(sk)->icsk_backoff = 0;
+	inet_csk(sk)->icsk_probes_out = 0;
+	/* Deinitialize accept_queue to trap illegal accesses. */
+	memset(&icsk->icsk_accept_queue, 0,
+		   sizeof(icsk->icsk_accept_queue));
+
+
+	/* from tcp_create_openreq_child: */
+	tp->pred_flags = 0;
+	tp->rcv_wup = tp->copied_seq = tp->rcv_nxt = st.ack;
+
+	tp->snd_sml = tp->snd_nxt = tp->snd_up = st.seq;
+	/* + tcp_s_data_size(oldtp) */
+
+	tcp_prequeue_init(tp);
+
+	tp->srtt = 0;
+	tp->mdev = TCP_TIMEOUT_INIT;
+	icsk->icsk_rto = TCP_TIMEOUT_INIT;
+
+	tp->packets_out = 0;
+	tp->retrans_out = 0;
+	tp->sacked_out = 0;
+	tp->fackets_out = 0;
+	tp->snd_ssthresh = TCP_INFINITE_SSTHRESH;
+
+	tp->snd_cwnd = 2;
+	tp->snd_cwnd_cnt = 0;
+
+	icsk->icsk_ca_ops = &tcp_init_congestion_ops;
+
+	tcp_set_ca_state(sk, TCP_CA_Open);
+	tcp_init_xmit_timers(sk);
+	skb_queue_head_init(&tp->out_of_order_queue);
+	tp->write_seq = tp->pushed_seq = tp->snd_nxt;
+
+	tp->rx_opt.saw_tstamp = 0;
+
+	tp->rx_opt.dsack = 0;
+	tp->rx_opt.num_sacks = 0;
+
+	tp->urg_data = 0;
+
+	tp->rx_opt.tstamp_ok = st.tstamp_ok ? 1 : 0;
+	tp->rx_opt.sack_ok = st.sack_ok;
+	/* TODO: support fack ? */
+
+	tp->window_clamp = 65535 << 14; /* set to max for now */
+	tp->rcv_ssthresh = tp->rcv_wnd = st.rcv_wnd << st.rcv_wscale;
+
+	tp->rx_opt.wscale_ok = st.wscale_ok;
+	if (tp->rx_opt.wscale_ok) {
+		tp->rx_opt.snd_wscale = st.snd_wscale;
+		tp->rx_opt.rcv_wscale = st.rcv_wscale;
+	} else {
+		tp->rx_opt.snd_wscale = tp->rx_opt.rcv_wscale = 0;
+		tp->window_clamp = min(tp->window_clamp, 65535U);
+	}
+
+	tp->snd_wnd = st.snd_wnd << tp->rx_opt.snd_wscale;
+	tp->max_window = tp->snd_wnd;
+
+	if (tp->rx_opt.tstamp_ok) {
+		tp->rx_opt.ts_recent = st.ts_recent;
+		tp->rx_opt.ts_recent_stamp = get_seconds();
+		/* We want get_seconds() + ts_offset == st->ts_val.
+		tp->rx_opt.ts_offset = st->ts_val - tcp_time_stamp;
+		*/
+		tp->rx_opt.rcv_tsval = st.ts_val;
+
+		tp->advmss -= TCPOLEN_TSTAMP_ALIGNED;
+		tp->tcp_header_len = sizeof(struct tcphdr);
+		tp->tcp_header_len += TCPOLEN_TSTAMP_ALIGNED;
+	} else {
+		tp->rx_opt.ts_recent_stamp = 0;
+		tp->tcp_header_len = sizeof(struct tcphdr);
+		tp->rx_opt.rcv_tsval = 0;
+	}
+
+	tp->rx_opt.mss_clamp = st.mss_clamp;
+	tp->ecn_flags = st.ecn_ok ? TCP_ECN_OK : 0;
+
+	sk->sk_socket->state = SS_CONNECTED;
+
+	/* from recv_ack: */
+	tp->copied_seq = tp->rcv_nxt;
+	smp_mb();
+	tcp_set_state(sk, TCP_ESTABLISHED);
+	sk->sk_state_change(sk);
+
+	tp->snd_una = tp->snd_up = st.snd_una;
+	tcp_init_wl(tp, st.ack);
+
+	/* TODO(swolchok): use a real RTT measurement. */
+	/* TODO(ewust): use exported functions to do this */
+	/* tcp_valid_rtt_meas(sk, msecs_to_jiffies(10));
+	tcp_ack_update_rtt(sk, 0, 0); */
+
+	icsk->icsk_af_ops->rebuild_header(sk);
+
+	/* tcp_init_metrics(sk);
+	tcp_init_congestion_control(sk);*/
+
+	if (icsk->icsk_ca_ops->init)
+		icsk->icsk_ca_ops->init(sk);
+
+	tp->lsndtime = tcp_time_stamp;
+
+	tcp_initialize_rcv_mss(sk);
+	/*tcp_init_buffer_space(sk);*/
+	tcp_fast_path_on(tp);
+
+	/* If user did not call bind on this socket,
+	   we'll have to do this:
+	*/
+	//inet_csk_get_port(sk, st.sport);
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 33)
+	__inet_hash_nolisten(sk);
+#else
+	__inet_hash_nolisten(sk, NULL);
+#endif
+
+	return 0;
+}
+
 int forge_setsockopt(struct sock *sk, int level, int optname,
 		char __user *optval, unsigned int optlen)
 {
 	if (optname == TCP_STATE) {
-		struct tcp_state st;
-		struct inet_connection_sock *icsk;
-		struct tcp_sock *tp;
 
 		if (!capable(CAP_NET_RAW))
 			return -EACCES;
 
-		if (copy_from_user(&st, (struct tcp_state __user *)optval,
-						   sizeof(st)))
-			return -EFAULT;
-
-		/* from syn_recv: */
-		icsk = inet_csk(sk);
-		tp = tcp_sk(sk);
-        /* TODO: Support kernel > 3.3 which doesn't do inet_sk() */
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 33)
-		inet_sk(sk)->daddr = st.dst_ip;
-		inet_sk(sk)->rcv_saddr = st.src_ip;
-		inet_sk(sk)->saddr = st.src_ip;
-		inet_sk(sk)->id = tp->write_seq ^ jiffies;
-#else
-		inet_sk(sk)->inet_daddr = st.dst_ip;
-		inet_sk(sk)->inet_rcv_saddr = st.src_ip;
-		inet_sk(sk)->inet_saddr = st.src_ip;
-		inet_sk(sk)->inet_id = tp->write_seq ^ jiffies;
-#endif
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
-		inet_sk(sk)->opt = NULL;	/* TODO: support Ip options */
-#else
-        inet_sk(sk)->inet_opt = NULL;
-#endif
-
-		inet_sk(sk)->mc_ttl = 1;    /* TODO: add multicast support */
-
-		icsk->icsk_ext_hdr_len = 0;
-
-		tcp_mtup_init(sk);
-		if (tp->rx_opt.user_mss && tp->rx_opt.user_mss < tp->advmss)
-			tp->advmss = tp->rx_opt.user_mss;
-
-		/* from inet_csk_forge: */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 33)
-		inet_sk(sk)->dport = st.dport;
-		inet_sk(sk)->num = ntohs(st.sport);
-		inet_sk(sk)->sport = st.sport;
-#else
-		inet_sk(sk)->inet_dport = st.dport;
-		inet_sk(sk)->inet_num = ntohs(st.sport);
-		inet_sk(sk)->inet_sport = st.sport;
-#endif
-		sk->sk_write_space = sk_stream_write_space;
-
-		inet_csk(sk)->icsk_retransmits = 0;
-		inet_csk(sk)->icsk_backoff = 0;
-		inet_csk(sk)->icsk_probes_out = 0;
-		/* Deinitialize accept_queue to trap illegal accesses. */
-		memset(&icsk->icsk_accept_queue, 0,
-			   sizeof(icsk->icsk_accept_queue));
-
-
-		/* from tcp_create_openreq_child: */
-		tp->pred_flags = 0;
-		tp->rcv_wup = tp->copied_seq = tp->rcv_nxt = st.ack;
-
-		tp->snd_sml = tp->snd_nxt = tp->snd_up = st.seq;
-		/* + tcp_s_data_size(oldtp) */
-
-		tcp_prequeue_init(tp);
-
-		tp->srtt = 0;
-		tp->mdev = TCP_TIMEOUT_INIT;
-		icsk->icsk_rto = TCP_TIMEOUT_INIT;
-
-		tp->packets_out = 0;
-		tp->retrans_out = 0;
-		tp->sacked_out = 0;
-		tp->fackets_out = 0;
-		tp->snd_ssthresh = TCP_INFINITE_SSTHRESH;
-
-		tp->snd_cwnd = 2;
-		tp->snd_cwnd_cnt = 0;
-
-		icsk->icsk_ca_ops = &tcp_init_congestion_ops;
-
-		tcp_set_ca_state(sk, TCP_CA_Open);
-		tcp_init_xmit_timers(sk);
-		skb_queue_head_init(&tp->out_of_order_queue);
-		tp->write_seq = tp->pushed_seq = tp->snd_nxt;
-
-		tp->rx_opt.saw_tstamp = 0;
-
-		tp->rx_opt.dsack = 0;
-		tp->rx_opt.num_sacks = 0;
-
-		tp->urg_data = 0;
-
-		tp->rx_opt.tstamp_ok = st.tstamp_ok ? 1 : 0;
-		tp->rx_opt.sack_ok = st.sack_ok;
-		/* TODO: support fack ? */
-
-		tp->window_clamp = 65535 << 14; /* set to max for now */
-		tp->rcv_ssthresh = tp->rcv_wnd = st.rcv_wnd << st.rcv_wscale;
-
-		tp->rx_opt.wscale_ok = st.wscale_ok;
-		if (tp->rx_opt.wscale_ok) {
-			tp->rx_opt.snd_wscale = st.snd_wscale;
-			tp->rx_opt.rcv_wscale = st.rcv_wscale;
-		} else {
-			tp->rx_opt.snd_wscale = tp->rx_opt.rcv_wscale = 0;
-			tp->window_clamp = min(tp->window_clamp, 65535U);
-		}
-
-		tp->snd_wnd = st.snd_wnd << tp->rx_opt.snd_wscale;
-		tp->max_window = tp->snd_wnd;
-
-		if (tp->rx_opt.tstamp_ok) {
-			tp->rx_opt.ts_recent = st.ts_recent;
-			tp->rx_opt.ts_recent_stamp = get_seconds();
-			/* We want get_seconds() + ts_offset == st->ts_val.
-			tp->rx_opt.ts_offset = st->ts_val - tcp_time_stamp;
-			*/
-			tp->rx_opt.rcv_tsval = st.ts_val;
-
-			tp->advmss -= TCPOLEN_TSTAMP_ALIGNED;
-			tp->tcp_header_len = sizeof(struct tcphdr);
-			tp->tcp_header_len += TCPOLEN_TSTAMP_ALIGNED;
-		} else {
-			tp->rx_opt.ts_recent_stamp = 0;
-			tp->tcp_header_len = sizeof(struct tcphdr);
-			tp->rx_opt.rcv_tsval = 0;
-		}
-
-		tp->rx_opt.mss_clamp = st.mss_clamp;
-		tp->ecn_flags = st.ecn_ok ? TCP_ECN_OK : 0;
-
-		sk->sk_socket->state = SS_CONNECTED;
-
-		/* from recv_ack: */
-		tp->copied_seq = tp->rcv_nxt;
-		smp_mb();
-		tcp_set_state(sk, TCP_ESTABLISHED);
-		sk->sk_state_change(sk);
-
-		tp->snd_una = tp->snd_up = st.snd_una;
-		tcp_init_wl(tp, st.ack);
-
-		/* TODO(swolchok): use a real RTT measurement. */
-		/* TODO(ewust): use exported functions to do this */
-		/* tcp_valid_rtt_meas(sk, msecs_to_jiffies(10));
-		tcp_ack_update_rtt(sk, 0, 0); */
-
-		icsk->icsk_af_ops->rebuild_header(sk);
-
-		/* tcp_init_metrics(sk);
-		tcp_init_congestion_control(sk);*/
-
-		if (icsk->icsk_ca_ops->init)
-			icsk->icsk_ca_ops->init(sk);
-
-		tp->lsndtime = tcp_time_stamp;
-
-		tcp_initialize_rcv_mss(sk);
-		/*tcp_init_buffer_space(sk);*/
-		tcp_fast_path_on(tp);
-
-		/* If user did not call bind on this socket,
-		   we'll have to do this:
-		*/
-		/*inet_csk_get_port(sk, st->sport);*/
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 33)
-		__inet_hash_nolisten(sk);
-#else
-		__inet_hash_nolisten(sk, NULL);
-#endif
-
-		return 0;
+		return forge_setopt_new(sk, level, optname, optval, optlen);
 	}
 	return tcp_setsockopt(sk, level, optname, optval, optlen);
 }
