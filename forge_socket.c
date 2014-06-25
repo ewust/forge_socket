@@ -167,6 +167,47 @@ int forge_getsockopt(struct sock *sk, int level, int optname,
 }
 EXPORT_SYMBOL(forge_getsockopt);
 
+int forge_setopt_update(struct sock *sk, int level, int optname,
+		char __user *optval, unsigned int optlen)
+{
+	struct tcp_state st;
+	struct tcp_sock *tp;
+
+	if (copy_from_user(&st, (struct tcp_state __user *)optval,
+					   sizeof(st)))
+		return -EFAULT;
+
+	tp = tcp_sk(sk);
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 33)
+	inet_sk(sk)->daddr = st.dst_ip;
+	inet_sk(sk)->rcv_saddr = st.src_ip;
+	inet_sk(sk)->saddr = st.src_ip;
+	inet_sk(sk)->id = tp->write_seq ^ jiffies;
+	inet_sk(sk)->dport = st.dport;
+	inet_sk(sk)->num = ntohs(st.sport);
+	inet_sk(sk)->sport = st.sport;
+#else
+	inet_sk(sk)->inet_daddr = st.dst_ip;
+	inet_sk(sk)->inet_rcv_saddr = st.src_ip;
+	inet_sk(sk)->inet_saddr = st.src_ip;
+	inet_sk(sk)->inet_id = tp->write_seq ^ jiffies;
+	inet_sk(sk)->inet_dport = st.dport;
+	inet_sk(sk)->inet_num = ntohs(st.sport);
+	inet_sk(sk)->inet_sport = st.sport;
+#endif
+
+	tp->rcv_wup = tp->copied_seq = tp->rcv_nxt = st.ack;
+
+	tp->snd_sml = tp->snd_nxt = tp->snd_up = st.seq;
+
+	// TODO: tcp timestamps
+
+	return 0;
+}
+
+
+
 int forge_setopt_new(struct sock *sk, int level, int optname,
 		char __user *optval, unsigned int optlen)
 {
@@ -357,7 +398,11 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 		if (!capable(CAP_NET_RAW))
 			return -EACCES;
 
-		return forge_setopt_new(sk, level, optname, optval, optlen);
+		if (sk->sk_state == TCP_ESTABLISHED) {
+			return forge_setopt_update(sk, level, optname, optval, optlen);	
+		} else {
+			return forge_setopt_new(sk, level, optname, optval, optlen);
+		}
 	}
 	return tcp_setsockopt(sk, level, optname, optval, optlen);
 }
