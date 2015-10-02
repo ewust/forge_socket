@@ -25,9 +25,21 @@ static struct inet_protosw forge_sw = {
 	.protocol   = IPPROTO_TCP,
 	.prot       = &forge_prot,
 	.ops        = &inet_forge_ops,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 16, 0)
 	.no_check   = 0,
+#endif
 	.flags      = INET_PROTOSW_ICSK,
 };
+
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 18, 0)
+struct tcp_congestion_ops tcp_init_congestion_ops  = {
+	.name		= "",
+	.owner		= THIS_MODULE,
+	.ssthresh	= tcp_reno_ssthresh,
+	.cong_avoid	= tcp_reno_cong_avoid,
+};
+#endif
 
 /* This is a copy of inet_listen, but uses SOCK_FORGE instead of SOCK_STREAM
    This allows us to listen on SOCK_FORGE sockets.
@@ -241,8 +253,13 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 
 		tcp_prequeue_init(tp);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 15, 0)
 		tp->srtt = 0;
 		tp->mdev = TCP_TIMEOUT_INIT;
+#else
+		tp->srtt_us = 0;
+		tp->mdev_us = TCP_TIMEOUT_INIT;
+#endif
 		icsk->icsk_rto = TCP_TIMEOUT_INIT;
 
 		tp->packets_out = 0;
