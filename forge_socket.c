@@ -129,6 +129,8 @@ int forge_getsockopt(struct sock *sk, int level, int optname,
 		if (!capable(CAP_NET_RAW))
 			return -EACCES;
 
+        memset(&ret, 0, sizeof(ret));
+
 		ret.ack     = tcp_sk(sk)->rcv_nxt;
 		ret.seq     = tcp_sk(sk)->snd_nxt;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 33)
