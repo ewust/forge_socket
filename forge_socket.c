@@ -18,6 +18,8 @@
 #include <linux/uaccess.h>
 #include "forge_socket.h"
 
+
+
 struct proto forge_prot;
 struct proto_ops inet_forge_ops;
 static struct inet_protosw forge_sw = {
@@ -33,12 +35,16 @@ static struct inet_protosw forge_sw = {
 
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 18, 0)
+/*
 struct tcp_congestion_ops tcp_init_congestion_ops  = {
 	.name		= "",
 	.owner		= THIS_MODULE,
 	.ssthresh	= tcp_reno_ssthresh,
 	.cong_avoid	= tcp_reno_cong_avoid,
+        .min_cwnd       = tcp_reno_min_cwnd,
 };
+*/
+//extern struct tcp_congestion_ops tcp_init_congestion_ops;
 #endif
 
 /* This is a copy of inet_listen, but uses SOCK_FORGE instead of SOCK_STREAM
@@ -273,7 +279,11 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 		tp->snd_cwnd = 2;
 		tp->snd_cwnd_cnt = 0;
 
-		icsk->icsk_ca_ops = &tcp_init_congestion_ops;
+		// For some reason, tcp_init_congestion_ops doesn't reach us
+		// so we can just call tcp_init_sock() to set it instead.
+		//icsk->icsk_ca_ops = &tcp_init_congestion_ops;
+		icsk->icsk_ca_ops = NULL;
+		tcp_init_sock(sk);
 
 		tcp_set_ca_state(sk, TCP_CA_Open);
 		tcp_init_xmit_timers(sk);
