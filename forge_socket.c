@@ -320,9 +320,11 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 			tp->rx_opt.ts_recent = st.ts_recent;
 			tp->rx_opt.ts_recent_stamp = get_seconds();
 			/* We want get_seconds() + ts_offset == st->ts_val.
-			tp->rx_opt.ts_offset = st->ts_val - tcp_time_stamp;
 			*/
-			tp->rx_opt.rcv_tsval = st.ts_val;
+			//tp->rx_opt.ts_offset = st->ts_val - tcp_time_stamp;
+			//tp->rx_opt.rcv_tsval = st.ts_val;
+			//tp->rx_opt.rcv_tsecr = st.ts_val;
+			tp->tsoffset = st.ts_val - ((__u32)(jiffies));
 
 			tp->advmss -= TCPOLEN_TSTAMP_ALIGNED;
 			tp->tcp_header_len = sizeof(struct tcphdr);
