@@ -286,7 +286,7 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 		tcp_init_sock(sk);
 
 		tcp_set_ca_state(sk, TCP_CA_Open);
-		tcp_init_xmit_timers(sk);
+		//tcp_init_xmit_timers(sk);	// No longer exported >= 4.3, but is actually called in tcp_init_sock() above
 		skb_queue_head_init(&tp->out_of_order_queue);
 		tp->write_seq = tp->pushed_seq = tp->snd_nxt;
 
@@ -375,8 +375,10 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 33)
 		__inet_hash_nolisten(sk);
-#else
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(4, 3, 0)
 		__inet_hash_nolisten(sk, NULL);
+#else
+		inet_ehash_nolisten(sk, NULL);
 #endif
 
 		return 0;
