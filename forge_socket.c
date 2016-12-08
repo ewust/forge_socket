@@ -27,7 +27,7 @@ static struct inet_protosw forge_sw = {
 	.protocol   = IPPROTO_TCP,
 	.prot       = &forge_prot,
 	.ops        = &inet_forge_ops,
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 16, 0)
+#if !(LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0) || RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,0))
 	.no_check   = 0,
 #endif
 	.flags      = INET_PROTOSW_ICSK,
@@ -261,7 +261,7 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 
 		tcp_prequeue_init(tp);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 15, 0)
+#if !(LINUX_VERSION_CODE >= KERNEL_VERSION(3, 15, 0) || RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,0))
 		tp->srtt = 0;
 		tp->mdev = TCP_TIMEOUT_INIT;
 #else
