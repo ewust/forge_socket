@@ -381,6 +381,31 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 		inet_ehash_nolisten(sk, NULL);
 #endif
 
+		/* uc_ttl is at least as old as 2.6.17, maybe older.
+		 * TODO: test whether it works properly prior to 4.0,
+		 * which is the farthest back I've tested.
+		 */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 17)
+		/* Not all permissible s16 values are valid TTL
+		 * values; any negative number is changed
+		 * to -1 (so that the driver will use the
+		 * default TTL) and anything larger than 255
+		 * is truncated to fit in 8 bits.  (A TTL of
+		 * zero is permitted, as a way to test that
+		 * packets are dropped correctly, but otherwise
+		 * doesn't usually make sense.)
+		 */
+		if (st.inet_ttl < 0) {
+		    inet_sk(sk)->uc_ttl = -1;
+		}
+		else if (st.inet_ttl > 255) {
+		    inet_sk(sk)->uc_ttl = 255;
+		}
+		else {
+		    inet_sk(sk)->uc_ttl = st.inet_ttl;
+		}
+#endif
+
 		return 0;
 	}
 	return tcp_setsockopt(sk, level, optname, optval, optlen);

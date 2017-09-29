@@ -30,6 +30,12 @@ struct tcp_state {
 	__u32       ts_val;     /* Timestamp to use next. */
 
 	__u32       mss_clamp;
+
+	/*
+	 * Fields that are below the TCP layer, but that we
+	 * might want to mess with anyway.
+	 */
+	__s16       inet_ttl;   /* unicast IP ttl (use -1 for the default) */
 };
 
 
