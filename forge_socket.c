@@ -161,6 +161,7 @@ int forge_getsockopt(struct sock *sk, int level, int optname,
 		ret.dst_ip  = inet_sk(sk)->inet_daddr;
 		ret.sport   = inet_sk(sk)->inet_sport;
 		ret.dport   = inet_sk(sk)->inet_dport;
+		ret.inet_ttl = inet_sk(sk)->uc_ttl;
 #endif
 
 		ret.snd_una = tcp_sk(sk)->snd_una;
