@@ -233,6 +233,9 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 		if (tp->rx_opt.user_mss && tp->rx_opt.user_mss < tp->advmss)
 			tp->advmss = tp->rx_opt.user_mss;
 
+		if (tp->advmss == 0)
+			tp->advmss = st.mss_clamp;
+
 		/* from inet_csk_forge: */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 33)
 		inet_sk(sk)->dport = st.dport;
