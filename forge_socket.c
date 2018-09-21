@@ -174,6 +174,8 @@ int forge_getsockopt(struct sock *sk, int level, int optname,
 		ret.snd_wscale = tcp_sk(sk)->rx_opt.snd_wscale;
 		ret.rcv_wscale = tcp_sk(sk)->rx_opt.rcv_wscale;
 
+		ret.mss_clamp  = tcp_sk(sk)->advmss;
+
 		/* TODO: check optlen == sizeof(ret),
 		   otherwise only write optlen bytes!
 		*/
@@ -229,6 +231,7 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 		icsk->icsk_ext_hdr_len = 0;
 
 		tcp_mtup_init(sk);
+		tp->advmss = 1460;  // Hack...
 		if (tp->rx_opt.user_mss && tp->rx_opt.user_mss < tp->advmss)
 			tp->advmss = tp->rx_opt.user_mss;
 
