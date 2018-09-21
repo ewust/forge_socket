@@ -21,6 +21,7 @@ void print_state(struct tcp_state *st)
     printf("\tecn_ok: %d\n", st->ecn_ok);
     printf("\tsnd_wscale: %d\n", st->snd_wscale);
     printf("\trcv_wscale: %d\n", st->rcv_wscale);
+    printf("\tinet_ttl: %d\n", st->inet_ttl);
 }
 
 // Fills in all but the src/dst ip/port and seq/ack numbers
@@ -219,6 +220,7 @@ int test_swap()
 
     state.src_ip = inet_addr("4.2.2.1");
     state.sport = htons(1234);
+    state.inet_ttl = 88;
     set_sock_state(sock2, &state);
 
     r = getsockopt(sock2, IPPROTO_TCP, TCP_STATE, &state2, &len);
