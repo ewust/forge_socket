@@ -246,7 +246,7 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 		inet_sk(sk)->inet_num = ntohs(st.sport);
 		inet_sk(sk)->inet_sport = st.sport;
 #endif
-		sk->sk_write_space = sk_stream_write_space;
+		//sk->sk_write_space = sk_stream_write_space;
 
 		inet_csk(sk)->icsk_retransmits = 0;
 		inet_csk(sk)->icsk_backoff = 0;
@@ -263,9 +263,9 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 		tp->snd_sml = tp->snd_nxt = tp->snd_up = st.seq;
 		/* + tcp_s_data_size(oldtp) */
 
-		tcp_prequeue_init(tp);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 15, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 15, 0)		
+        tcp_prequeue_init(tp);
 		tp->srtt = 0;
 		tp->mdev = TCP_TIMEOUT_INIT;
 #else
@@ -277,7 +277,7 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 		tp->packets_out = 0;
 		tp->retrans_out = 0;
 		tp->sacked_out = 0;
-		tp->fackets_out = 0;
+		//tp->fackets_out = 0;
 		tp->snd_ssthresh = TCP_INFINITE_SSTHRESH;
 
 		tp->snd_cwnd = 2;
@@ -291,7 +291,7 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 
 		tcp_set_ca_state(sk, TCP_CA_Open);
 		//tcp_init_xmit_timers(sk);	// No longer exported >= 4.3, but is actually called in tcp_init_sock() above
-		skb_queue_head_init(&tp->out_of_order_queue);
+		//skb_queue_head_init(&tp->out_of_order_queue);
 		tp->write_seq = tp->pushed_seq = tp->snd_nxt;
 
 		tp->rx_opt.saw_tstamp = 0;
@@ -366,7 +366,7 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 		if (icsk->icsk_ca_ops->init)
 			icsk->icsk_ca_ops->init(sk);
 
-		tp->lsndtime = tcp_time_stamp;
+		tp->lsndtime = jiffies;
 
 		tcp_initialize_rcv_mss(sk);
 		/*tcp_init_buffer_space(sk);*/
