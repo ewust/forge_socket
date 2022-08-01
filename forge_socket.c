@@ -82,7 +82,6 @@ out:
 	return err;
 }
 
-
 int __init forge_init(void)
 {
 	int rc = -EINVAL;
@@ -103,6 +102,7 @@ int __init forge_init(void)
 	forge_prot.owner = THIS_MODULE;
 	forge_prot.getsockopt = forge_getsockopt;
 	forge_prot.setsockopt = forge_setsockopt;
+
 
 	/* proto_register will only alloc twsk_prot and rsk_prot if they are
 	   null no sense in allocing more space - we can just use TCP's, since
@@ -190,8 +190,13 @@ int forge_getsockopt(struct sock *sk, int level, int optname,
 }
 EXPORT_SYMBOL(forge_getsockopt);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 1)
+int forge_setsockopt(struct sock *sk, int level, int optname,
+		sockptr_t optval, unsigned int optlen)
+#else
 int forge_setsockopt(struct sock *sk, int level, int optname,
 		char __user *optval, unsigned int optlen)
+#endif
 {
 	if (optname == TCP_STATE) {
 		struct tcp_state st;
@@ -201,8 +206,12 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 		if (!capable(CAP_NET_RAW))
 			return -EACCES;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 1)
+		if (copy_from_sockptr(&st, optval, sizeof(st)))
+#else
 		if (copy_from_user(&st, (struct tcp_state __user *)optval,
-						   sizeof(st)))
+						   sizeof(st)))	
+#endif
 			return -EFAULT;
 
 		/* from syn_recv: */
@@ -224,7 +233,7 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
 		inet_sk(sk)->opt = NULL;	/* TODO: support Ip options */
 #else
-        inet_sk(sk)->inet_opt = NULL;
+        	inet_sk(sk)->inet_opt = NULL;
 #endif
 
 		inet_sk(sk)->mc_ttl = 1;    /* TODO: add multicast support */
@@ -265,7 +274,7 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 15, 0)		
-        tcp_prequeue_init(tp);
+        	tcp_prequeue_init(tp);
 		tp->srtt = 0;
 		tp->mdev = TCP_TIMEOUT_INIT;
 #else
@@ -322,7 +331,11 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 
 		if (tp->rx_opt.tstamp_ok) {
 			tp->rx_opt.ts_recent = st.ts_recent;
-			tp->rx_opt.ts_recent_stamp = get_seconds();
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 1)
+			tp->rx_opt.ts_recent_stamp = ktime_get_seconds();
+#else
+			tp->rx_opt.ts_recent_stamp = get_seconds();	
+#endif
 			/* We want get_seconds() + ts_offset == st->ts_val.
 			*/
 			//tp->rx_opt.ts_offset = st->ts_val - tcp_time_stamp;
@@ -382,7 +395,9 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 #elif LINUX_VERSION_CODE < KERNEL_VERSION(4, 3, 0)
 		__inet_hash_nolisten(sk, NULL);
 #else
-		inet_ehash_nolisten(sk, NULL);
+		// bool inet_ehash_nolisten(struct sock *sk, 
+		// 		struct sock *osk, bool *found_dup_sk)
+		inet_ehash_nolisten(sk, NULL, NULL);
 #endif
 
 		/* uc_ttl is at least as old as 2.6.17, maybe older.
@@ -412,6 +427,7 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 
 		return 0;
 	}
+
 	return tcp_setsockopt(sk, level, optname, optval, optlen);
 }
 EXPORT_SYMBOL(forge_setsockopt);
