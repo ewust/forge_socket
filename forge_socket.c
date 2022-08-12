@@ -403,7 +403,9 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 		inet_ehash_nolisten(sk, NULL);
 #else
 		// https://www.spinics.net/lists/kernel/msg4334811.html
-		inet_ehash_nolisten(sk, NULL, false);
+		// bool inet_ehash_nolisten(struct sock *sk, struct sock *osk,
+		// 	 bool *found_dup_sk);
+		inet_ehash_nolisten(sk, NULL, NULL);
 #endif
 
 		/* uc_ttl is at least as old as 2.6.17, maybe older.
