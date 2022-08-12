@@ -190,8 +190,13 @@ int forge_getsockopt(struct sock *sk, int level, int optname,
 }
 EXPORT_SYMBOL(forge_getsockopt);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)
 int forge_setsockopt(struct sock *sk, int level, int optname,
 		char __user *optval, unsigned int optlen)
+#else
+int forge_setsockopt(struct sock *sk, int level, int optname,
+		sockptr_t optval, unsigned int optlen)
+#endif
 {
 	if (optname == TCP_STATE) {
 		struct tcp_state st;
@@ -201,8 +206,13 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 		if (!capable(CAP_NET_RAW))
 			return -EACCES;
 
-		if (copy_from_user(&st, (struct tcp_state __user *)optval,
-						   sizeof(st)))
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)
+		if (copy_from_user(&st, (struct tcp_state __user *)optval, sizeof(st)))
+#else
+		if (copy_from_sockptr(&st, optval, sizeof(st)))
+
+#endif
 			return -EFAULT;
 
 		/* from syn_recv: */
@@ -264,7 +274,7 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 		/* + tcp_s_data_size(oldtp) */
 
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 15, 0)		
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 15, 0)
         tcp_prequeue_init(tp);
 		tp->srtt = 0;
 		tp->mdev = TCP_TIMEOUT_INIT;
@@ -322,7 +332,15 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 
 		if (tp->rx_opt.tstamp_ok) {
 			tp->rx_opt.ts_recent = st.ts_recent;
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 3, 0)
+			//The get_seconds() function is deprecated as it truncates
+			// the timestamp to 32 bits. Change to either ktime_get_seconds()
+			// or ktime_get_real_seconds()
 			tp->rx_opt.ts_recent_stamp = get_seconds();
+#else
+			tp->rx_opt.ts_recent_stamp = ktime_get_real_seconds();
+# endif
 			/* We want get_seconds() + ts_offset == st->ts_val.
 			*/
 			//tp->rx_opt.ts_offset = st->ts_val - tcp_time_stamp;
@@ -381,8 +399,11 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 		__inet_hash_nolisten(sk);
 #elif LINUX_VERSION_CODE < KERNEL_VERSION(4, 3, 0)
 		__inet_hash_nolisten(sk, NULL);
-#else
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 191)
 		inet_ehash_nolisten(sk, NULL);
+#else
+		// https://www.spinics.net/lists/kernel/msg4334811.html
+		inet_ehash_nolisten(sk, NULL, false);
 #endif
 
 		/* uc_ttl is at least as old as 2.6.17, maybe older.
@@ -412,6 +433,7 @@ int forge_setsockopt(struct sock *sk, int level, int optname,
 
 		return 0;
 	}
+
 	return tcp_setsockopt(sk, level, optname, optval, optlen);
 }
 EXPORT_SYMBOL(forge_setsockopt);
