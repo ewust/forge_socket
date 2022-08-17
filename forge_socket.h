@@ -40,8 +40,13 @@ struct tcp_state {
 
 
 #ifdef __KERNEL__
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)
 int forge_setsockopt(struct sock *sk, int level, int optname,
 		char __user *optval, unsigned int optlen);
+#else
+int forge_setsockopt(struct sock *sk, int level, int optname,
+		sockptr_t optval, unsigned int optlen);
+#endif
 int forge_getsockopt(struct sock *sk, int level, int optname,
 		char __user *optval, int __user *optlen);
 int forge_getsockopt_socket(struct socket *sock, int level, int optname,
